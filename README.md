@@ -16,9 +16,9 @@ Otherwise...
   }
 ```
 2. run `npm install` (you will need nodejs installed)
-3. create a symlink in packages/local:
+3. create a symlink in packages/local (this works for linux/mac; windows guys you'll need to work this one out on your own)
 ```
-cd packages/local
+cd packages/local;
 ln -s ../node_modules/extjs-db-proxies/packages/local/dbproxies dbproxies
 ```
 4. Add to the requires in your app.json:
@@ -28,6 +28,7 @@ ln -s ../node_modules/extjs-db-proxies/packages/local/dbproxies dbproxies
 ]
 ```
 (4b. if you have any other packages that need to use the proxies, they will also need to require the package)
+
 5. Require in the proxy you need from a model or store class, and set the proxy using `type: 'sql'`
 ```
 Ext.define('MyApp.model.Person', {
