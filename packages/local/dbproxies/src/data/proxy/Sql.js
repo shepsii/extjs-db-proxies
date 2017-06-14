@@ -308,6 +308,574 @@ Ext.define('DBProxies.data.proxy.Sql', {
         if (options.callback) {
             Ext.callback(options.callback, options.scope, [options.operation]);
         }
+    },
+    
+    
+    /* CREATE */
+    create: function(operation) {
+
+        var options = {
+            operation: operation,
+            records: operation.getRecords()
+        };
+
+        operation.setStarted();
+        this.getDatabaseObject().transaction(
+            Ext.bind(this.createTransaction, this, [options], true),
+            Ext.bind(this.transactionError, this, [options], true)
+        );
+
+    },
+
+    createTransaction: function(tx) {
+
+        var args = arguments;
+        var options = args[args.length - 1];
+        var tableExists = this.getTableExists();
+        var tmp = [];
+        var i;
+        var ln;
+        var placeholders;
+
+        if (!tableExists) {
+            this.createTable(tx);
+        }
+
+        for (i = 0, ln = this.getColumns().length; i < ln; i++) {
+            tmp.push('?');
+        }
+        placeholders = tmp.join(', ');
+
+        Ext.apply(options, {
+            tx: tx,
+            resultSet: new Ext.data.ResultSet({
+                success: true
+            }),
+            table: this.getTable(),
+            columns: this.getColumns(),
+            totalRecords: options.records.length,
+            executedRecords: 0,
+            errors: [],
+            placeholders: placeholders
+        });
+
+        Ext.each(options.records, Ext.bind(this.createRecord, this, [options], true));
+
+    },
+
+    createRecord: function(record, i, records, options) {
+
+        if (!record.phantom) {
+            options.executedRecords += 1;
+            this.createRecordCallback(options);
+            return;
+        }
+
+        var id = record.getId();
+        var data = this.getRecordData(record);
+        var values = this.getColumnValues(options.columns, data);
+
+        options.tx.executeSql([
+                'INSERT INTO ', options.table,
+                ' (', options.columns.join(', '), ')',
+                ' VALUES (', options.placeholders, ')'
+            ].join(''), values,
+            Ext.bind(this.createRecordSuccess, this, [options, record, data], true),
+            Ext.bind(this.createRecordError, this, [options, record], true)
+        );
+
+    },
+
+    createRecordSuccess: function(tx, result, options, record, data) {
+
+        data = this.decodeRecordData(data);
+
+        if (this.getCloud() && record.session) {
+            record.session.addOperation({
+                model: record.get('model'),
+                record_id: record.getId(),
+                type: 'create',
+                fields: data
+            });
+        }
+
+        options.executedRecords += 1;
+
+        record.phantom = false;
+        record.commit();
+
+        this.createRecordCallback(options);
+
+    },
+
+    createRecordError: function(tx, error, options, record) {
+
+        console.error('INSERT ERROR:', error);
+
+        options.executedRecords += 1;
+        options.errors.push({
+            clientId: record.getId(),
+            error: error
+        });
+
+        this.createRecordCallback(options);
+
+    },
+
+    createRecordCallback: function(options) {
+        if (options.executedRecords === options.totalRecords) {
+            this.createComplete(options);
+        }
+    },
+
+    createComplete: function(options) {
+
+        if (options.operation.process(options.resultSet) === false) {
+            this.fireEvent('exception', this, options.operation);
+        }
+
+        if (options.errors) {
+            options.operation.setException(options.errors);
+        }
+
+    },
+    
+    
+    /* ERASE */
+    erase: function(operation, callback, scope) {
+
+        var erasedRecords = [];
+        var options = {
+            operation: operation,
+            callback: callback || Ext.emptyFn,
+            scope: scope || {},
+            records: operation.getRecords(),
+            erasedRecords: erasedRecords,
+            resultSet: new Ext.data.ResultSet({
+                records: erasedRecords,
+                success: true
+            })
+        };
+
+        operation.setStarted();
+
+        this.getDatabaseObject().transaction(
+            Ext.bind(this.eraseTransaction, this, [options], true),
+            Ext.bind(this.transactionError, this, [options], true),
+            Ext.bind(this.eraseTransactionSuccess, this, [options], true)
+        );
+
+    },
+
+    eraseTransaction: function(tx) {
+
+        var args = arguments;
+        var options = args[args.length - 1];
+        var tableExists = this.getTableExists();
+
+        if (!tableExists) {
+            this.createTable(tx);
+        }
+
+        Ext.apply(options, {
+            tx: tx,
+            idProperty: this.getModel().prototype.getIdProperty(),
+            table: this.getTable(),
+            errors: []
+        });
+
+        Ext.each(options.records, Ext.bind(this.eraseRecord, this, [options], true));
+
+    },
+
+    eraseRecord: function(record, i, records, options) {
+        options.tx.executeSql([
+                'DELETE FROM ', options.table,
+                ' WHERE ', options.idProperty, ' = ?'
+            ].join(''), [record.getId()],
+            Ext.bind(this.eraseRecordSuccess, this, [options, record], true),
+            Ext.emptyFn
+        );
+    },
+
+    eraseRecordSuccess: function(tx, result, options, record) {
+
+        if (this.getCloud() && record.session) {
+            record.session.addOperation({
+                model: record.get('model'),
+                record_id: record.getId(),
+                type: 'delete'
+            });
+        }
+
+        options.erasedRecords.push(record);
+
+    },
+
+    eraseTransactionSuccess: function() {
+        var args = arguments;
+        var options = args[args.length - 1];
+
+        if (options.operation.process(options.resultSet) === false) {
+            this.fireEvent('exception', this, options.operation);
+        }
+
+        if (options.error) {
+            options.operation.setException(options.error);
+        }
+
+        Ext.callback(options.callback, options.scope, [options.operation]);
+    },
+    
+    
+    /* READ */
+    read: function(operation, callback, scope) {
+
+        var options = {
+            operation: operation,
+            callback: callback || Ext.emptyFn,
+            scope: scope || {}
+        };
+
+        operation.setStarted();
+        this.getDatabaseObject().transaction(
+            Ext.bind(this.readTransaction, this, [options], true),
+            Ext.bind(this.transactionError, this, [options], true)
+        );
+
+    },
+
+    readTransaction: function(tx) {
+
+        var args = arguments;
+        var options = args[args.length - 1];
+        var tableExists = this.getTableExists();
+        var records = [];
+        var values = [];
+        var sql;
+        var params = options.operation.getParams() || {};
+
+        if (!tableExists) {
+            this.createTable(tx);
+        }
+
+        Ext.apply(params, {
+            page: options.operation.getPage(),
+            start: options.operation.getStart(),
+            limit: options.operation.getLimit(),
+            sorters: options.operation.getSorters(),
+            filters: options.operation.getFilters(),
+            recordId: options.operation.getId()
+        });
+
+        Ext.apply(options, {
+            tx: tx,
+            idProperty: this.getModel().prototype.getIdProperty(),
+            recordCreator: options.operation.getRecordCreator(),
+            params: params,
+            records: records,
+            resultSet: new Ext.data.ResultSet({
+                records: records,
+                success: true
+            }),
+            table: this.getTable(),
+            errors: []
+        });
+
+        if (options.params.recordId) {
+            sql = this.readFromIdBuildQuery(options, values);
+        } else {
+            sql = this.readMultipleBuildQuery(options, values);
+        }
+
+        options.tx.executeSql(sql, values,
+            Ext.bind(this.readQuerySuccess, this, [options], true),
+            Ext.bind(this.readQueryError, this, [options], true)
+        );
+
+    },
+
+    readQuerySuccess: function(tx, result, options) {
+
+        var rows = result.rows;
+        var count = rows.length;
+        var i;
+        var ln;
+        var data;
+        var model = this.getModel();
+
+        for (i = 0, ln = count; i < ln; i++) {
+            data = this.decodeRecordData(rows.item(i));
+            options.records.push(Ext.isFunction(options.recordCreator) ?
+                options.recordCreator(data, model) :
+                new model(data));
+        }
+
+        options.resultSet.setSuccess(true);
+        options.resultSet.setTotal(count);
+        options.resultSet.setCount(count);
+
+        this.readComplete(options);
+    },
+
+    readQueryError: function(tx, errors, options) {
+
+        console.error('READ ERROR:', errors);
+        options.errors.push(errors);
+
+        options.resultSet.setSuccess(false);
+        options.resultSet.setTotal(0);
+        options.resultSet.setCount(0);
+    },
+
+    readFromIdBuildQuery: function(options, values) {
+        values.push(options.params.recordId);
+        return [
+            'SELECT * FROM ', options.table,
+            ' WHERE ', options.idProperty, ' = ?'
+        ].join('');
+    },
+
+    readMultipleBuildQuery: function(options, values) {
+
+        var ln;
+        var i;
+        var filter;
+        var sorter;
+        var property;
+        var value;
+        var sql = [
+            'SELECT * FROM ', options.table
+        ].join('');
+
+        // filters
+        if (options.params.filters && options.params.filters.length) {
+            ln = options.params.filters.length;
+            for (i = 0; i < ln; i += 1) {
+                filter = options.params.filters[i];
+                property = filter.getProperty();
+                value = filter.getValue();
+                if (property !== null) {
+                    sql += [
+                        i === 0 ? ' WHERE ' : ' AND ', property,
+                        ' ', (filter.getAnyMatch() ? ('LIKE \'%' + value + '%\'') : '= ?')
+                    ].join('');
+                    if (!filter.getAnyMatch()) {
+                        values.push(value);
+                    }
+                }
+            }
+        }
+
+        // sorters
+        if (options.params.sorters && options.params.sorters.length) {
+            ln = options.params.sorters.length;
+            for (i = 0; i < ln; i += 1) {
+                sorter = options.params.sorters[i];
+                property = sorter.getProperty();
+                if (property !== null) {
+                    sql += [
+                        i === 0 ? ' ORDER BY ' : ', ', property, ' ', sorter.getDirection()
+                    ].join('');
+                }
+            }
+        }
+
+        // handle start, limit, sort, filter and group params
+        if (Ext.isDefined(options.params.page)) {
+            sql += [
+                ' LIMIT ' + parseInt(options.params.start, 10) + ', ' + parseInt(options.params.limit, 10)
+            ].join('');
+        }
+
+        return sql;
+    },
+
+    readComplete: function(options) {
+
+        if (options.operation.process(options.resultSet) === false) {
+            this.fireEvent('exception', this, options.operation);
+        }
+
+        if (options.errors) {
+            options.operation.setException(options.errors);
+        }
+
+        Ext.callback(options.callback, options.scope, [options.operation]);
+
+    },
+    
+    
+    /* UPDATE */
+    update: function(operation, callback, scope) {
+
+        var options = {
+            operation: operation,
+            callback: callback || Ext.emptyFn,
+            scope: scope || {},
+            records: operation.getRecords()
+        };
+
+        operation.setStarted();
+        this.getDatabaseObject().transaction(
+            Ext.bind(this.updateTransaction, this, [options], true),
+            Ext.bind(this.transactionError, this, [options], true)
+        );
+
+    },
+
+    updateTransaction: function(tx) {
+
+        var args = arguments;
+        var options = args[args.length - 1];
+        var tableExists = this.getTableExists();
+        var updatedRecords = [];
+
+        if (!tableExists) {
+            this.createTable(tx);
+        }
+
+        Ext.apply(options, {
+            tx: tx,
+            idProperty: this.getModel().prototype.getIdProperty(),
+            updatedRecords: updatedRecords,
+            resultSet: new Ext.data.ResultSet({
+                records: updatedRecords,
+                success: true
+            }),
+            table: this.getTable(),
+            columns: this.getColumns(),
+            totalRecords: options.records.length,
+            executedRecords: 0,
+            errors: []
+        });
+
+        Ext.each(options.records, Ext.bind(this.updateRecord, this, [options], true));
+
+    },
+
+    updateRecord: function(record, rI, records, options) {
+
+        var id = record.getId();
+        var data = this.getRecordData(record);
+        var values = this.getColumnValues(options.columns, data);
+        var modValues = [];
+        var updates = [];
+        var col;
+        var modifiedKeys = Ext.isObject(record.modified) ? Ext.Object.getKeys(record.modified) : [];
+        var modData = {};
+        var ln;
+        var i;
+        var fields = record.getFields();
+        var explicitFieldNames = [];
+        var field;
+        var implicitData = {};
+        var implicitChanged = false;
+
+        for (i = 0, ln = options.columns.length; i < ln; i++) {
+            col = options.columns[i];
+            if (!Ext.Array.contains(modifiedKeys, col)) {
+                continue;
+            }
+            updates.push(col + ' = ?');
+            modValues.push(values[i]);
+            modData[col] = record.data[col];
+        }
+
+        if (this.getImplicitFields()) {
+            Ext.each(fields, function(field) {
+                explicitFieldNames.push(field.name);
+            }, this);
+            for (field in record.data) {
+                if (Ext.Array.contains(explicitFieldNames, field)) {
+                    continue;
+                }
+                implicitData[field] = record.data[field];
+                if (!Ext.Array.contains(modifiedKeys, field)) {
+                    continue;
+                }
+                implicitChanged = true;
+                modData[field] = record.data[field];
+            }
+        }
+
+        if (implicitChanged) {
+            updates.push(this.getImplicitFieldsColName() + ' = ?');
+            modValues.push(Ext.JSON.encode(implicitData));
+        }
+
+        if (!updates.length) {
+            this.updateRecordSuccess(options.tx, null, options, record, data, modData);
+            return;
+        }
+
+        options.tx.executeSql([
+                'UPDATE ', options.table,
+                ' SET ', updates.join(', '),
+                ' WHERE ', options.idProperty, ' = ?'
+            ].join(''), modValues.concat(id),
+            Ext.bind(this.updateRecordSuccess, this, [options, record, data, modData], true),
+            Ext.bind(this.updateRecordError, this, [options, record], true)
+        );
+
+    },
+
+    updateRecordSuccess: function(tx, result, options, record, data, modData) {
+
+        var recordId = record.getId();
+        var key;
+        var model = record.get('model');
+
+        if (this.getCloud() && record.session) {
+            for (key in modData) {
+                record.session.addOperation({
+                    model: model,
+                    record_id: recordId,
+                    type: 'update',
+                    field: key,
+                    value: modData[key]
+                });
+            }
+        }
+
+        data = this.decodeRecordData(data);
+        options.updatedRecords.push(data);
+
+        options.executedRecords += 1;
+
+        this.updateRecordCallback(options);
+    },
+
+    updateRecordError: function(tx, error, options, record) {
+
+        console.error('UPDATE ERROR:', error);
+
+        options.executedRecords += 1;
+        options.errors.push({
+            clientId: record.getId(),
+            error: error
+        });
+
+        this.updateRecordCallback(options);
+
+    },
+
+    updateRecordCallback: function(options) {
+        if (options.executedRecords === options.totalRecords) {
+            this.updateComplete(options);
+        }
+    },
+
+    updateComplete: function(options) {
+        if (options.operation.process(options.resultSet) === false) {
+            this.fireEvent('exception', this, options.operation);
+        }
+
+        if (options.errors) {
+            options.operation.setException(options.errors);
+        }
+
+        Ext.callback(options.callback, options.scope, [options.operation]);
     }
 
 });
