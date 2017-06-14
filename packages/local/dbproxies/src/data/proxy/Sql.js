@@ -1,7 +1,6 @@
 Ext.define('DBProxies.data.proxy.Sql', {
     alias: 'proxy.sql',
     extend: 'Ext.data.proxy.Client',
-    alternateClassName: 'Ext.data.proxy.SQL',
 
     requires: [
         'DBProxies.data.SQLiteConnection'
