@@ -1,0 +1,59 @@
+{
+  "_args": [],
+  "_from": "git+ssh://git@github.com/shepsii/extjs-db-proxies.git",
+  "_id": "fbg-toolkit@1.0.1",
+  "_inCache": true,
+  "_installable": true,
+  "_location": "/fbg-toolkit",
+  "_phantomChildren": {},
+  "_requested": {
+    "hosted": {
+      "directUrl": "https://raw.githubusercontent.com/shepsii/extjs-db-proxies/master/package.json",
+      "gitUrl": "git://github.com/shepsii/extjs-db-proxies.git",
+      "httpsUrl": "git+https://github.com/shepsii/extjs-db-proxies.git",
+      "shortcut": "github:shepsii/extjs-db-proxies",
+      "ssh": "git@github.com:shepsii/extjs-db-proxies.git",
+      "sshUrl": "git+ssh://git@github.com/shepsii/extjs-db-proxies.git",
+      "type": "github"
+    },
+    "name": null,
+    "raw": "git+ssh://git@github.com/shepsii/extjs-db-proxies.git",
+    "rawSpec": "git+ssh://git@github.com/shepsii/extjs-db-proxies.git",
+    "scope": null,
+    "spec": "git+ssh://git@github.com/shepsii/extjs-db-proxies.git",
+    "type": "hosted"
+  },
+  "_requiredBy": [
+    "/"
+  ],
+  "_resolved": "git+ssh://git@github.com/shepsii/extjs-db-proxies.git#eb622296ee2285330382d0b8c46184efe7faf793",
+  "_shasum": "8706103f54531f6d0abcfc3dd20a02e9b33f9ddd",
+  "_shrinkwrap": null,
+  "_spec": "git+ssh://git@github.com/shepsii/extjs-db-proxies.git",
+  "_where": "/Users/simon/fbgapps/fbg-draft-dominator",
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/shepsii/extjs-db-proxies/issues"
+  },
+  "dependencies": {},
+  "description": "ExtJS proxies for WebSql/Sqlite and IndexedDB",
+  "devDependencies": {},
+  "directories": {
+    "test": "test"
+  },
+  "framework": "ext",
+  "homepage": "https://github.com/shepsii/extjs-db-proxies#readme",
+  "license": "MIT",
+  "main": "index.js",
+  "name": "extjs-db-proxies",
+  "optionalDependencies": {},
+  "readme": "ERROR: No README data found!",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shepsii/extjs-db-proxies.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "version": "1.0.1"
+}
