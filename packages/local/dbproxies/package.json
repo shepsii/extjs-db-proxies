@@ -103,87 +103,7 @@
      * Sass configuration properties.
      */
     "sass" : {
-        /**
-         * The namespace to which this package's SASS corresponds. The default value of
-         * "dbproxies" means that the files in ./sass/src (and ./sass/var) match classes in
-         * the dbproxies" root namespace. In other words, "dbproxies.panel.Panel" maps to
-         * ./sass/src/panel/Panel.scss.
-         *
-         * To style classes from any namespace, set this to blank. If this is blank,
-         * then to style "dbproxies.panel.Panel" you would put SASS in
-         * ./sass/src/dbproxies/panel/Panel.scss.
-         */
-        "namespace": "dbproxies",
-
-        /**
-         * Comma-separated list of files or folders containing extra Sass. These
-         * files are automatically included in the Sass compilation. By default this
-         * is just "etc/all.scss" to allow import directives to control the order
-         * other files are included.
-         *
-         * All "etc" files are included at the top of the Sass compilation in their
-         * dependency order:
-         *
-         *      +-------+---------+
-         *      |       | base    |
-         *      | theme +---------+
-         *      |       | derived |
-         *      +-------+---------+
-         *      | packages        |  (in package dependency order)
-         *      +-----------------+
-         *      | application     |
-         *      +-----------------+
-         */
-        "etc": [
-            "${package.dir}/sass/etc/all.scss",
-            "${package.dir}/${toolkit.name}/sass/etc/all.scss"
-         ],
-
-        /**
-         * Comma-separated list of folders containing Sass variable definitions
-         * files. These file can also define Sass mixins for use by components.
-         *
-         * All "var" files are included after "etc" files in the Sass compilation in
-         * dependency order:
-         *
-         *      +-------+---------+
-         *      |       | base    |
-         *      | theme +---------+
-         *      |       | derived |
-         *      +-------+---------+
-         *      | packages        |  (in package dependency order)
-         *      +-----------------+
-         *      | application     |
-         *      +-----------------+
-         *
-         * The "sass/var/all.scss" file is always included at the start of the var
-         * block before any files associated with JavaScript classes.
-         */
-        "var": [
-            "${package.dir}/sass/var",
-            "${package.dir}/${toolkit.name}/sass/var"
-        ],
-
-        /**
-         * Comma-separated list of folders containing Sass rule files.
-         *
-         * All "src" files are included after "var" files in the Sass compilation in
-         * dependency order (the same order as "etc"):
-         *
-         *      +-------+---------+
-         *      |       | base    |
-         *      | theme +---------+
-         *      |       | derived |
-         *      +-------+---------+
-         *      | packages        |  (in package dependency order)
-         *      +-----------------+
-         *      | application     |
-         *      +-----------------+
-         */
-        "src": [
-            "${package.dir}/sass/src",
-            "${package.dir}/${toolkit.name}/sass/src"
-        ]
+        
     },
 
     /**
@@ -191,8 +111,7 @@
      * classes must be explicitly required to be included in the build.
      */
     "classpath": [
-        "${package.dir}/src",
-        "${package.dir}/${toolkit.name}/src"
+        "${package.dir}/src"
     ],
 
     /**
@@ -203,8 +122,7 @@
      * in the "override" property is also included.
      */
     "overrides": [
-        "${package.dir}/overrides",
-        "${package.dir}/${toolkit.name}/overrides"
+        "${package.dir}/overrides"
     ],
 
     "example": {
