@@ -92,10 +92,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         var fields = record.getFields();
         var data = {};
         var name;
-        var value;
-        var newValue;
         var explicitFieldNames = [];
-        var implicitData = {};
         var field;
 
         Ext.each(fields, function(field) {
@@ -307,184 +304,128 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
 
     /* READ */
     read: function(operation, callback, scope) {
-        /*
-         var options = {
-         operation: operation,
-         callback: callback || Ext.emptyFn,
-         scope: scope || {}
-         };
 
-         operation.setStarted();
-         this.getDatabaseObject().transaction(
-         Ext.bind(this.readTransaction, this, [options], true),
-         Ext.bind(this.transactionError, this, [options], true)
-         );
-         */
+        var options = {
+            operation: operation,
+            callback: callback || Ext.emptyFn,
+            scope: scope || {}
+        };
+
+        operation.setStarted();
+        this.getDbTx('readonly', options, Ext.bind(this.readTransaction, this, [options], true));
+
     },
 
     readTransaction: function(tx) {
-        /*
-         var args = arguments;
-         var options = args[args.length - 1];
-         var tableExists = this.getTableExists();
-         var records = [];
-         var values = [];
-         var sql;
-         var params = options.operation.getParams() || {};
 
-         if (!tableExists) {
-         this.createTable(tx);
-         }
+        var args = arguments;
+        var options = args[args.length - 1];
+        var records = [];
+        var params = options.operation.getParams() || {};
 
-         Ext.apply(params, {
-         page: options.operation.getPage(),
-         start: options.operation.getStart(),
-         limit: options.operation.getLimit(),
-         sorters: options.operation.getSorters(),
-         filters: options.operation.getFilters(),
-         recordId: options.operation.getId()
-         });
+        Ext.apply(params, {
+            page: options.operation.getPage(),
+            start: options.operation.getStart(),
+            limit: options.operation.getLimit(),
+            sorters: options.operation.getSorters(),
+            filters: options.operation.getFilters(),
+            recordId: options.operation.getId()
+        });
 
-         Ext.apply(options, {
-         tx: tx,
-         idProperty: this.getModel().prototype.getIdProperty(),
-         recordCreator: options.operation.getRecordCreator(),
-         params: params,
-         records: records,
-         resultSet: new Ext.data.ResultSet({
-         records: records,
-         success: true
-         }),
-         table: this.getTable(),
-         errors: []
-         });
+        Ext.apply(options, {
+            tx: tx,
+            object_store: tx.objectStore(this.getDbName()),
+            idProperty: this.getModel().prototype.getIdProperty(),
+            recordCreator: options.operation.getRecordCreator(),
+            params: params,
+            records: records,
+            resultSet: new Ext.data.ResultSet({
+                records: records,
+                success: true
+            }),
+            errors: []
+        });
 
-         if (options.params.recordId) {
-         sql = this.readFromIdBuildQuery(options, values);
-         } else {
-         sql = this.readMultipleBuildQuery(options, values);
-         }
+        options.tx.onerror = Ext.bind(this.readQueryError, this, [options], true);
 
-         options.tx.executeSql(sql, values,
-         Ext.bind(this.readQuerySuccess, this, [options], true),
-         Ext.bind(this.readQueryError, this, [options], true)
-         );
-         */
+        if (options.params.recordId) {
+            this.readRecordFromId(options);
+        } else {
+            this.readRecordFromParams(options);
+        }
+
     },
 
-    readQuerySuccess: function(tx, result, options) {
-        /*
-         var rows = result.rows;
-         var count = rows.length;
-         var i;
-         var ln;
-         var data;
-         var model = this.getModel();
-
-         for (i = 0, ln = count; i < ln; i++) {
-         data = this.decodeRecordData(rows.item(i));
-         options.records.push(Ext.isFunction(options.recordCreator) ?
-         options.recordCreator(data, model) :
-         new model(data));
-         }
-
-         options.resultSet.setSuccess(true);
-         options.resultSet.setTotal(count);
-         options.resultSet.setCount(count);
-
-         this.readComplete(options);
-         */
+    readRecordFromId: function(options) {
+        var request = options.object_store.get(options.params.id);
+        request.onsuccess = Ext.bind(this.readRecordFromIdSuccess, this, [request, options], false);
     },
 
-    readQueryError: function(tx, errors, options) {
-        /*
-         console.error('READ ERROR:', errors);
-         options.errors.push(errors);
-
-         options.resultSet.setSuccess(false);
-         options.resultSet.setTotal(0);
-         options.resultSet.setCount(0);
-         */
+    readRecordFromIdSuccess: function(request, options) {
+        this.readSuccess([request.result], options);
     },
 
-    readFromIdBuildQuery: function(options, values) {
-        /*
-         values.push(options.params.recordId);
-         return [
-         'SELECT * FROM ', options.table,
-         ' WHERE ', options.idProperty, ' = ?'
-         ].join('');
-         */
+    readRecordFromParams: function(options) {
+
+        /* todo */
+        // either need to getAll/cursor + filter, or use an index.
+
+
+        // now we have everything: sort,
+
+
+        // apply limits
+
+
+        // go to readSuccess
+
     },
 
-    readMultipleBuildQuery: function(options, values) {
-        /*
-         var ln;
-         var i;
-         var filter;
-         var sorter;
-         var property;
-         var value;
-         var sql = [
-         'SELECT * FROM ', options.table
-         ].join('');
+    readSuccess: function(items, options) {
 
-         // filters
-         if (options.params.filters && options.params.filters.length) {
-         ln = options.params.filters.length;
-         for (i = 0; i < ln; i += 1) {
-         filter = options.params.filters[i];
-         property = filter.getProperty();
-         value = filter.getValue();
-         if (property !== null) {
-         sql += [
-         i === 0 ? ' WHERE ' : ' AND ', property,
-         ' ', (filter.getAnyMatch() ? ('LIKE \'%' + value + '%\'') : '= ?')
-         ].join('');
-         if (!filter.getAnyMatch()) {
-         values.push(value);
-         }
-         }
-         }
-         }
+        var model = this.getModel();
+        var count = items.length;
+        var i;
+        var data;
 
-         // sorters
-         if (options.params.sorters && options.params.sorters.length) {
-         ln = options.params.sorters.length;
-         for (i = 0; i < ln; i += 1) {
-         sorter = options.params.sorters[i];
-         property = sorter.getProperty();
-         if (property !== null) {
-         sql += [
-         i === 0 ? ' ORDER BY ' : ', ', property, ' ', sorter.getDirection()
-         ].join('');
-         }
-         }
-         }
+        for (i = 0; i < count; i += 1) {
+            data = items[i];
+            options.records.push(Ext.isFunction(options.recordCreator) ?
+                options.recordCreator(request.result, model) :
+                new model(data));
+        }
 
-         // handle start, limit, sort, filter and group params
-         if (Ext.isDefined(options.params.page)) {
-         sql += [
-         ' LIMIT ' + parseInt(options.params.start, 10) + ', ' + parseInt(options.params.limit, 10)
-         ].join('');
-         }
+        options.resultSet.setSuccess(true);
+        options.resultSet.setTotal(count);
+        options.resultSet.setCount(count);
 
-         return sql;
-         */
+        this.readComplete(options);
+
+    },
+
+    readQueryError: function(err, options) {
+        console.error('READ ERROR:', err.target.error);
+        options.errors.push(err.target.error);
+
+        options.resultSet.setSuccess(false);
+        options.resultSet.setTotal(0);
+        options.resultSet.setCount(0);
+
+        this.readComplete(options);
     },
 
     readComplete: function(options) {
-        /*
-         if (options.operation.process(options.resultSet) === false) {
-         this.fireEvent('exception', this, options.operation);
-         }
 
-         if (options.errors) {
-         options.operation.setException(options.errors);
-         }
+        if (options.operation.process(options.resultSet) === false) {
+            this.fireEvent('exception', this, options.operation);
+        }
 
-         Ext.callback(options.callback, options.scope, [options.operation]);
-         */
+        if (options.errors) {
+            options.operation.setException(options.errors);
+        }
+
+        Ext.callback(options.callback, options.scope, [options.operation]);
+
     },
 
 
@@ -604,7 +545,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         }
 
         Ext.callback(options.callback, options.scope, [options.operation]);
-         
+
     }
 
 });
