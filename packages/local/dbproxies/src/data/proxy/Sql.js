@@ -1,6 +1,6 @@
 Ext.define('DBProxies.data.proxy.Sql', {
     alias: 'proxy.sql',
-    extend: 'Ext.data.proxy.Client',
+    extend: 'DBProxies.data.proxy.Db',
 
     requires: [
         'DBProxies.data.SQLiteConnection'
@@ -14,7 +14,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
         columns: '',
         tableExists: false,
         defaultDateFormat: 'Y-m-d H:i:s.u',
-        cloud: true,
+        cloud: false,
         implicitFields: false,
         implicitFieldsColName: 'implicit'
     },
