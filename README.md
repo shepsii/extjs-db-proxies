@@ -1,5 +1,9 @@
 # extjs-db-proxies
-WebSQL/SQLite and IndexedDB proxies for ExtJS
+WebSQL/SQLite, IndexedDB and dynamic proxies for ExtJS
+
+sql proxy: dynamically switches to websql or sqlite if the cordova plugin is found
+indexeddb: tested in chrome, safari and firefox. IE testing to come (although openCursor in place of getAll is working)
+dynamic: will automatically select sql or indexeddb, in the order you specify, based on support
 
 --HOW TO USE--
 
@@ -29,7 +33,7 @@ ln -s ../node_modules/extjs-db-proxies/packages/local/dbproxies dbproxies
 ```
 (4b. if you have any other packages that need to use the proxies, they will also need to require the package)
 
-5. Require in the proxy you need from a model or store class, and set the proxy using `type: 'sql'`
+5. Require in the proxy you need from a model or store class, and set the proxy using e.g. `type: 'sql'` or see below for an example of the use of the dynamic proxy:
 ```
 Ext.define('MyApp.model.Person', {
     extend: 'Ext.data.Model',
@@ -39,7 +43,18 @@ Ext.define('MyApp.model.Person', {
         ...
     ],
     proxy: {
-        type: 'sql'
+        type: 'dynamic',
+        allConfig: {
+            cloud: false
+        },
+        proxies: [
+            {
+                type: 'sql'
+            },
+            {
+                type: 'indexeddb'
+            }
+        ]
     },
     ...
 ```
