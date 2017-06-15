@@ -1,34 +1,54 @@
+/**
+ * Sql proxy to save Ext.data.Model instances for offline use. Will default to cordova sqlitePlugin if present,
+ * otherwise will use websql. Model schema changes are not supported once deployed to production.
+ */
 Ext.define('DBProxies.data.proxy.Sql', {
     alias: 'proxy.sql',
     extend: 'DBProxies.data.proxy.Db',
 
     requires: [
-        'DBProxies.data.SQLiteConnection'
+        'DBProxies.data.SqlConnection'
     ],
-    
+
     isSQLProxy: true,
 
     config: {
-        table: null,
-        implicitTable: null,
-        columns: '',
-        tableExists: false,
+        /**
+         * @cfg {String} tableName
+         * The name of the sql table. Will default to the string after the last '.' in the model's class name
+         */
+        tableName: null,
+
+        /**
+         * @cfg {String} defaultDateFormat
+         * The date format to use to store data in sql
+         */
         defaultDateFormat: 'Y-m-d H:i:s.u',
-        cloud: false,
-        implicitFields: false,
+
+        /**
+         * @cfg {String} implicitFieldsColName
+         * The name of the database column that will store all the implicit fields. This only needs to be changed if
+         * for some reason the model has an explicitly defined field named 'implicit'
+         */
         implicitFieldsColName: 'implicit'
     },
 
+    statics: {
+        isSupported: function() {
+            return !!window.openDatabase;
+        }
+    },
+
     getDatabaseObject: function() {
-        return DBProxies.data.SQLiteConnection.getConn();
+        return DBProxies.data.SqlConnection.getConn();
     },
 
     updateModel: function(model) {
-        
+
         var modelName;
         var defaultDateFormat;
         var table;
-        
+
         if (model) {
 
             modelName = model.prototype.entityName;
@@ -41,40 +61,40 @@ Ext.define('DBProxies.data.proxy.Sql', {
                 }
             }, this);
 
-            if (!this.getTable()) {
-                this.setTable(table);
+            if (!this.getTableName()) {
+                this.setTableName(table);
             }
 
-            this.setColumns(this.getPersistedModelColumns(model));
+            this.columns = this.getPersistedModelColumns(model);
         }
 
         this.callParent(arguments);
-        
+
     },
 
     setException: function(operation, error) {
-        
+
         operation.setException(error);
-        
+
     },
 
     createTable: function(transaction) {
-        
+
         transaction.executeSql([
             'CREATE TABLE IF NOT EXISTS ',
-            this.getTable(),
+            this.getTableName(),
             ' (', this.getSchemaString(), ')'
         ].join(''));
-        this.setTableExists(true);
-        
+        this.tableExists = true;
+
     },
 
     getColumnValues: function(columns, data) {
-        
+
         var ln = columns.length,
             values = [],
             i, column, value;
-        
+
         for (i = 0; i < ln; i++) {
             column = columns[i];
             value = data[column];
@@ -84,7 +104,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
         }
 
         return values;
-        
+
     },
 
     getPersistedModelColumns: function(model) {
@@ -104,13 +124,13 @@ Ext.define('DBProxies.data.proxy.Sql', {
                 columns.push(field.getName());
             }
         }
-        
+
         if (this.getImplicitFields()) {
             columns.push(this.getImplicitFieldsColName());
         }
-        
+
         return columns;
-        
+
     },
 
     writeDate: function(field, date) {
@@ -134,7 +154,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
     dropTable: function(config) {
 
         var me = this;
-        var table = me.getTable();
+        var table = me.getTableName();
         var callback = config ? config.callback : null;
         var scope = config ? config.scope || me : null;
         var db = me.getDatabaseObject();
@@ -154,7 +174,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
             }
         );
 
-        me.setTableExists(false);
+        me.tableExists = false;
 
     },
 
@@ -192,7 +212,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
                 schema.push(name + ' ' + type);
             }
         }
-        
+
         if (this.getImplicitFields()) {
             schema.push(this.getImplicitFieldsColName() + ' TEXT');
         }
@@ -207,7 +227,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
         var newData = {};
         var fields = this.getModel().getFields().items;
         var fieldTypes = {};
-        
+
         Ext.each(fields, function(field) {
             fieldTypes[field.getName()] = field.type;
         });
@@ -233,7 +253,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
     },
 
     getRecordData: function(record) {
-        
+
         var fields = record.getFields();
         var data = {};
         var name;
@@ -244,7 +264,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
         var field;
 
         Ext.each(fields, function(field) {
-            
+
             explicitFieldNames.push(field.name);
             if (!Ext.isDefined(field.persist) || field.persist) {
                 name = field.name;
@@ -267,9 +287,9 @@ Ext.define('DBProxies.data.proxy.Sql', {
                 }
                 data[name] = newValue;
             }
-            
+
         }, this);
-        
+
         if (this.getImplicitFields()) {
             for (field in record.data) {
                 if (!Ext.Array.contains(explicitFieldNames, field)) {
@@ -309,8 +329,8 @@ Ext.define('DBProxies.data.proxy.Sql', {
             Ext.callback(options.callback, options.scope, [options.operation]);
         }
     },
-    
-    
+
+
     /* CREATE */
     create: function(operation) {
 
@@ -331,17 +351,16 @@ Ext.define('DBProxies.data.proxy.Sql', {
 
         var args = arguments;
         var options = args[args.length - 1];
-        var tableExists = this.getTableExists();
         var tmp = [];
         var i;
         var ln;
         var placeholders;
 
-        if (!tableExists) {
+        if (!this.tableExists) {
             this.createTable(tx);
         }
 
-        for (i = 0, ln = this.getColumns().length; i < ln; i++) {
+        for (i = 0, ln = this.columns.length; i < ln; i++) {
             tmp.push('?');
         }
         placeholders = tmp.join(', ');
@@ -351,8 +370,8 @@ Ext.define('DBProxies.data.proxy.Sql', {
             resultSet: new Ext.data.ResultSet({
                 success: true
             }),
-            table: this.getTable(),
-            columns: this.getColumns(),
+            table: this.getTableName(),
+            columns: this.columns,
             totalRecords: options.records.length,
             executedRecords: 0,
             errors: [],
@@ -439,8 +458,8 @@ Ext.define('DBProxies.data.proxy.Sql', {
         }
 
     },
-    
-    
+
+
     /* ERASE */
     erase: function(operation, callback, scope) {
 
@@ -471,16 +490,15 @@ Ext.define('DBProxies.data.proxy.Sql', {
 
         var args = arguments;
         var options = args[args.length - 1];
-        var tableExists = this.getTableExists();
 
-        if (!tableExists) {
+        if (!this.tableExists) {
             this.createTable(tx);
         }
 
         Ext.apply(options, {
             tx: tx,
             idProperty: this.getModel().prototype.getIdProperty(),
-            table: this.getTable(),
+            table: this.getTableName(),
             errors: []
         });
 
@@ -526,8 +544,8 @@ Ext.define('DBProxies.data.proxy.Sql', {
 
         Ext.callback(options.callback, options.scope, [options.operation]);
     },
-    
-    
+
+
     /* READ */
     read: function(operation, callback, scope) {
 
@@ -549,13 +567,12 @@ Ext.define('DBProxies.data.proxy.Sql', {
 
         var args = arguments;
         var options = args[args.length - 1];
-        var tableExists = this.getTableExists();
         var records = [];
         var values = [];
         var sql;
         var params = options.operation.getParams() || {};
 
-        if (!tableExists) {
+        if (!this.tableExists) {
             this.createTable(tx);
         }
 
@@ -578,7 +595,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
                 records: records,
                 success: true
             }),
-            table: this.getTable(),
+            table: this.getTableName(),
             errors: []
         });
 
@@ -600,11 +617,10 @@ Ext.define('DBProxies.data.proxy.Sql', {
         var rows = result.rows;
         var count = rows.length;
         var i;
-        var ln;
         var data;
         var model = this.getModel();
 
-        for (i = 0, ln = count; i < ln; i++) {
+        for (i = 0; i < count; i += 1) {
             data = this.decodeRecordData(rows.item(i));
             options.records.push(Ext.isFunction(options.recordCreator) ?
                 options.recordCreator(data, model) :
@@ -616,6 +632,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
         options.resultSet.setCount(count);
 
         this.readComplete(options);
+
     },
 
     readQueryError: function(tx, errors, options) {
@@ -704,8 +721,8 @@ Ext.define('DBProxies.data.proxy.Sql', {
         Ext.callback(options.callback, options.scope, [options.operation]);
 
     },
-    
-    
+
+
     /* UPDATE */
     update: function(operation, callback, scope) {
 
@@ -728,10 +745,9 @@ Ext.define('DBProxies.data.proxy.Sql', {
 
         var args = arguments;
         var options = args[args.length - 1];
-        var tableExists = this.getTableExists();
         var updatedRecords = [];
 
-        if (!tableExists) {
+        if (!this.tableExists) {
             this.createTable(tx);
         }
 
@@ -743,8 +759,8 @@ Ext.define('DBProxies.data.proxy.Sql', {
                 records: updatedRecords,
                 success: true
             }),
-            table: this.getTable(),
-            columns: this.getColumns(),
+            table: this.getTableName(),
+            columns: this.columns,
             totalRecords: options.records.length,
             executedRecords: 0,
             errors: []

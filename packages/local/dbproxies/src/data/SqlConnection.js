@@ -1,4 +1,4 @@
-Ext.define('DBProxies.data.SQLiteConnection', {
+Ext.define('DBProxies.data.SqlConnection', {
     singleton: true,
     
     requires: [

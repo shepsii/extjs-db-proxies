@@ -122,7 +122,7 @@
      * in the "override" property is also included.
      */
     "overrides": [
-        "${package.dir}/overrides"
+        "${package.dir}/src/overrides"
     ],
 
     "example": {

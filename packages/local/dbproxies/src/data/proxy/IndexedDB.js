@@ -1,3 +1,6 @@
+/**
+ * IndexedDB proxy to save Ext.data.Model instances for offline use
+ */
 Ext.define('DBProxies.data.proxy.IndexedDB', {
     alias: 'proxy.indexeddb',
     extend: 'DBProxies.data.proxy.Db',
@@ -5,12 +8,26 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
     isIndexedDBProxy: true,
 
     config: {
-        db: false,
+        /**
+         * @cfg {String} dbName
+         * The name of the indexedDB database and data store. Will default to the string after the last '.' in the
+         * model's class name
+         */
         dbName: null,
-        idProperty: false,
-        cloud: false,
-        indices: [],
-        implicitFields: false
+
+        /**
+         * @cfg {String} indices
+         * N.B. redefining indices is NOT supported! Once a client sets the indices, there is no way of this being
+         * changed without clearing the database and starting again. So once you deploy to production, this cannot
+         * be changed and manual code would need to be written to port all data into a new dbName with the new indices
+         */
+        indices: []
+    },
+
+    statics: {
+        isSupported: function() {
+            return !!window.indexedDB;
+        }
     },
 
     updateModel: function(model) {
@@ -24,9 +41,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
             if (!this.getDbName()) {
                 this.setDbName(dbName);
             }
-            this.setIdProperty(model.prototype.getIdProperty());
-
-            /* todo: apply the indices */
+            this.idProp = model.prototype.getIdProperty();
         }
 
         this.callParent(arguments);
@@ -41,7 +56,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
     },
 
     ensureDb: function(options, callback, scope) {
-        if (this.getDb()) {
+        if (this.db) {
             Ext.callback(callback, scope);
             return;
         }
@@ -52,7 +67,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
     },
 
     openDbSuccess: function(request, callback, scope) {
-        this.setDb(request.result);
+        this.db = request.result;
         Ext.callback(callback, scope);
     },
 
@@ -64,7 +79,30 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
     },
 
     openDbSetSchema: function(request) {
-        var store = request.result.createObjectStore(this.getDbName(), {keyPath: this.getIdProperty()});
+        var store = request.result.createObjectStore(this.getDbName(), {keyPath: this.idProp});
+        var i;
+        var ln;
+        var indices = this.getIndices();
+        var index;
+        for (i = 0, ln = indices.length; i < ln; i += 1) {
+            index = indices[i];
+            store.createIndex(index, index, { unique: false });
+        }
+    },
+    
+    getIndexFromFilters: function(filters, options) {
+        if (!filters || filters.length !== 1) {
+            return false;
+        }
+        var filter = filters[0];
+        var property = filter.getProperty();
+        var value = filter.getValue();
+        var indices = this.getIndices();
+        if (!Ext.Array.contains(indices, property)) {
+            return false;
+        }
+        options.index_value = value;
+        return options.object_store.index(property);
     },
 
     getDbTx: function(type, options, callbackArg, scopeArg) {
@@ -74,7 +112,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
     },
 
     getDbTxWithDb: function(type, options, callback, scope) {
-        var tx = this.getDb().transaction([this.getDbName()], type);
+        var tx = this.db.transaction([this.getDbName()], type);
         tx.onerror = Ext.bind(this.transactionError, this, [options], true);
         Ext.callback(callback, scope, [tx]);
     },
@@ -92,10 +130,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         var fields = record.getFields();
         var data = {};
         var name;
-        var value;
-        var newValue;
         var explicitFieldNames = [];
-        var implicitData = {};
         var field;
 
         Ext.each(fields, function(field) {
@@ -307,184 +342,219 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
 
     /* READ */
     read: function(operation, callback, scope) {
-        /*
-         var options = {
-         operation: operation,
-         callback: callback || Ext.emptyFn,
-         scope: scope || {}
-         };
 
-         operation.setStarted();
-         this.getDatabaseObject().transaction(
-         Ext.bind(this.readTransaction, this, [options], true),
-         Ext.bind(this.transactionError, this, [options], true)
-         );
-         */
+        var options = {
+            operation: operation,
+            callback: callback || Ext.emptyFn,
+            scope: scope || {}
+        };
+
+        operation.setStarted();
+        this.getDbTx('readonly', options, Ext.bind(this.readTransaction, this, [options], true));
+
     },
 
     readTransaction: function(tx) {
-        /*
-         var args = arguments;
-         var options = args[args.length - 1];
-         var tableExists = this.getTableExists();
-         var records = [];
-         var values = [];
-         var sql;
-         var params = options.operation.getParams() || {};
 
-         if (!tableExists) {
-         this.createTable(tx);
-         }
+        var args = arguments;
+        var options = args[args.length - 1];
+        var records = [];
+        var params = options.operation.getParams() || {};
 
-         Ext.apply(params, {
-         page: options.operation.getPage(),
-         start: options.operation.getStart(),
-         limit: options.operation.getLimit(),
-         sorters: options.operation.getSorters(),
-         filters: options.operation.getFilters(),
-         recordId: options.operation.getId()
-         });
+        Ext.apply(params, {
+            page: options.operation.getPage(),
+            start: options.operation.getStart(),
+            limit: options.operation.getLimit(),
+            sorters: options.operation.getSorters(),
+            filters: options.operation.getFilters(),
+            recordId: options.operation.getId()
+        });
 
-         Ext.apply(options, {
-         tx: tx,
-         idProperty: this.getModel().prototype.getIdProperty(),
-         recordCreator: options.operation.getRecordCreator(),
-         params: params,
-         records: records,
-         resultSet: new Ext.data.ResultSet({
-         records: records,
-         success: true
-         }),
-         table: this.getTable(),
-         errors: []
-         });
+        Ext.apply(options, {
+            tx: tx,
+            object_store: tx.objectStore(this.getDbName()),
+            idProperty: this.getModel().prototype.getIdProperty(),
+            recordCreator: options.operation.getRecordCreator(),
+            params: params,
+            records: records,
+            resultSet: new Ext.data.ResultSet({
+                records: records,
+                success: true
+            }),
+            errors: []
+        });
 
-         if (options.params.recordId) {
-         sql = this.readFromIdBuildQuery(options, values);
-         } else {
-         sql = this.readMultipleBuildQuery(options, values);
-         }
+        options.tx.onerror = Ext.bind(this.readQueryError, this, [options], true);
 
-         options.tx.executeSql(sql, values,
-         Ext.bind(this.readQuerySuccess, this, [options], true),
-         Ext.bind(this.readQueryError, this, [options], true)
-         );
-         */
+        if (options.params.recordId) {
+            this.readRecordFromId(options);
+        } else {
+            this.readRecordsFromParams(options);
+        }
+
     },
 
-    readQuerySuccess: function(tx, result, options) {
-        /*
-         var rows = result.rows;
-         var count = rows.length;
-         var i;
-         var ln;
-         var data;
-         var model = this.getModel();
-
-         for (i = 0, ln = count; i < ln; i++) {
-         data = this.decodeRecordData(rows.item(i));
-         options.records.push(Ext.isFunction(options.recordCreator) ?
-         options.recordCreator(data, model) :
-         new model(data));
-         }
-
-         options.resultSet.setSuccess(true);
-         options.resultSet.setTotal(count);
-         options.resultSet.setCount(count);
-
-         this.readComplete(options);
-         */
+    readRecordFromId: function(options) {
+        var request = options.object_store.get(options.params.recordId);
+        request.onsuccess = Ext.bind(this.readRecordFromIdSuccess, this, [request, options], false);
     },
 
-    readQueryError: function(tx, errors, options) {
-        /*
-         console.error('READ ERROR:', errors);
-         options.errors.push(errors);
-
-         options.resultSet.setSuccess(false);
-         options.resultSet.setTotal(0);
-         options.resultSet.setCount(0);
-         */
+    readRecordFromIdSuccess: function(request, options) {
+        this.readSuccess([request.result], options);
     },
 
-    readFromIdBuildQuery: function(options, values) {
-        /*
-         values.push(options.params.recordId);
-         return [
-         'SELECT * FROM ', options.table,
-         ' WHERE ', options.idProperty, ' = ?'
-         ].join('');
-         */
+    readRecordsFromParams: function(options) {
+
+        var index = this.getIndexFromFilters(options.params.filters, options);
+        if (index) {
+            options.params.filters = [];
+            options.idb_getfrom = index;
+        } else {
+            options.idb_getfrom = options.object_store;
+        }
+            
+            
+        if (options.idb_getfrom.getAll) {
+            this.readAllRecordsGetAll(options, Ext.bind(this.readSuccess, this, [options], true));
+        } else {
+            this.readAllRecordsCursor(options, Ext.bind(this.readSuccess, this, [options], true));
+        }
+
     },
 
-    readMultipleBuildQuery: function(options, values) {
-        /*
-         var ln;
-         var i;
-         var filter;
-         var sorter;
-         var property;
-         var value;
-         var sql = [
-         'SELECT * FROM ', options.table
-         ].join('');
+    readAllRecordsGetAll: function(options, callbackArg, scopeArg) {
+        var callback = callbackArg || Ext.emptyFn;
+        var scope = scopeArg || {};
+        var items = [];
+        var request;
+        
+        if (options.index_value) {
+            request = options.idb_getfrom.getAll(options.index_value);
+        } else {
+            request = options.idb_getfrom.getAll();
+        }
 
-         // filters
-         if (options.params.filters && options.params.filters.length) {
-         ln = options.params.filters.length;
-         for (i = 0; i < ln; i += 1) {
-         filter = options.params.filters[i];
-         property = filter.getProperty();
-         value = filter.getValue();
-         if (property !== null) {
-         sql += [
-         i === 0 ? ' WHERE ' : ' AND ', property,
-         ' ', (filter.getAnyMatch() ? ('LIKE \'%' + value + '%\'') : '= ?')
-         ].join('');
-         if (!filter.getAnyMatch()) {
-         values.push(value);
-         }
-         }
-         }
-         }
+        request.onsuccess = Ext.bind(this.readAllRecordsGetAllSuccess, this, [options, callback, scope], true);
+    },
 
-         // sorters
-         if (options.params.sorters && options.params.sorters.length) {
-         ln = options.params.sorters.length;
-         for (i = 0; i < ln; i += 1) {
-         sorter = options.params.sorters[i];
-         property = sorter.getProperty();
-         if (property !== null) {
-         sql += [
-         i === 0 ? ' ORDER BY ' : ', ', property, ' ', sorter.getDirection()
-         ].join('');
-         }
-         }
-         }
+    readAllRecordsGetAllSuccess: function(evt, options, callback, scope) {
+        Ext.callback(callback, scope, [evt.target.result]);
+    },
 
-         // handle start, limit, sort, filter and group params
-         if (Ext.isDefined(options.params.page)) {
-         sql += [
-         ' LIMIT ' + parseInt(options.params.start, 10) + ', ' + parseInt(options.params.limit, 10)
-         ].join('');
-         }
+    readAllRecordsCursor: function(options, callbackArg, scopeArg) {
+        var callback = callbackArg || Ext.emptyFn;
+        var scope = scopeArg || {};
+        var items = [];
+        var request;
 
-         return sql;
-         */
+        if (options.index_value) {
+            request = options.idb_getfrom.openCursor(IDBKeyRange.only(options.index_value));
+        } else {
+            request = options.idb_getfrom.openCursor();
+        }
+        request.onsuccess = Ext.bind(this.readAllRecordsOnCursor, this, [items, options, callback, scope], true);
+
+    },
+    
+    readAllRecordsOnCursor: function(evt, items, options, callback, scope) {
+        var cursor = evt.target.result;
+        if (cursor) {
+            items.push(cursor.value);
+            cursor.continue();
+        } else {
+            Ext.callback(callback, scope, [items]);
+        }
+    },
+
+    readSuccess: function(items, options) {
+
+        var model = this.getModel();
+        var count = items.length;
+        var i;
+        var data;
+        var sorters;
+        var filters;
+        var limit;
+        var start;
+        var record;
+        var allRecords;
+        var validCount = 0;
+        var valid;
+        var filterLn;
+        var j;
+
+        for (i = 0; i < count; i += 1) {
+            data = items[i];
+            options.records.push(Ext.isFunction(options.recordCreator) ?
+                options.recordCreator(data, model) :
+                new model(data));
+        }
+
+        // apply filters, sorters, limit?
+        if (!options.params.recordId) {
+            sorters = options.params.sorters;
+            filters = options.params.filters;
+            limit = options.params.limit;
+            start = options.params.start;
+            allRecords = options.records;
+            options.records = [];
+
+            if (sorters) {
+                Ext.Array.sort(allRecords, Ext.util.Sorter.createComparator(sorters));
+            }
+
+            for (i = start || 0; i < count; i++) {
+                record = allRecords[i];
+                valid = true;
+
+                if (filters) {
+                    for (j = 0, filterLn = filters.length; j < filterLn; j++) {
+                        valid = filters[j].filter(record);
+                    }
+                }
+
+                if (valid) {
+                    options.records.push(record);
+                    validCount++;
+                }
+
+                if (limit && validCount === limit) {
+                    break;
+                }
+            }
+        }
+
+        options.resultSet.setSuccess(true);
+        options.resultSet.setTotal(options.records.length);
+        options.resultSet.setCount(options.records.length);
+
+        this.readComplete(options);
+
+    },
+
+    readQueryError: function(err, options) {
+        console.error('READ ERROR:', err.target.error);
+        options.errors.push(err.target.error);
+
+        options.resultSet.setSuccess(false);
+        options.resultSet.setTotal(0);
+        options.resultSet.setCount(0);
+
+        this.readComplete(options);
     },
 
     readComplete: function(options) {
-        /*
-         if (options.operation.process(options.resultSet) === false) {
-         this.fireEvent('exception', this, options.operation);
-         }
 
-         if (options.errors) {
-         options.operation.setException(options.errors);
-         }
+        if (options.operation.process(options.resultSet) === false) {
+            this.fireEvent('exception', this, options.operation);
+        }
 
-         Ext.callback(options.callback, options.scope, [options.operation]);
-         */
+        if (options.errors) {
+            options.operation.setException(options.errors);
+        }
+
+        Ext.callback(options.callback, options.scope, [options.operation]);
+
     },
 
 
@@ -604,7 +674,7 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         }
 
         Ext.callback(options.callback, options.scope, [options.operation]);
-         
+
     }
 
 });
