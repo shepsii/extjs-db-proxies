@@ -85,7 +85,11 @@ Ext.define('DBProxies.data.proxy.Sql', {
             this.getTableName(),
             ' (', this.getSchemaString(), ')'
         ].join(''));
+<<<<<<< HEAD
         this.tableExists = true;
+=======
+        this.setTableExists(true);
+>>>>>>> origin/master
 
     },
 
