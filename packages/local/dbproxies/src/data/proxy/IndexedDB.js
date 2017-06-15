@@ -389,21 +389,13 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         if (options.params.recordId) {
             this.readRecordFromId(options);
         } else {
-<<<<<<< HEAD
             this.readRecordsFromParams(options);
-=======
-            this.readRecordFromParams(options);
->>>>>>> origin/master
         }
 
     },
 
     readRecordFromId: function(options) {
-<<<<<<< HEAD
         var request = options.object_store.get(options.params.recordId);
-=======
-        var request = options.object_store.get(options.params.id);
->>>>>>> origin/master
         request.onsuccess = Ext.bind(this.readRecordFromIdSuccess, this, [request, options], false);
     },
 
@@ -411,7 +403,6 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         this.readSuccess([request.result], options);
     },
 
-<<<<<<< HEAD
     readRecordsFromParams: function(options) {
 
         var index = this.getIndexFromFilters(options.params.filters, options);
@@ -474,23 +465,6 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
             Ext.callback(callback, scope, [items]);
         }
     },
-=======
-    readRecordFromParams: function(options) {
-
-        /* todo */
-        // either need to getAll/cursor + filter, or use an index.
-
-
-        // now we have everything: sort,
-
-
-        // apply limits
-
-
-        // go to readSuccess
-
-    },
->>>>>>> origin/master
 
     readSuccess: function(items, options) {
 
@@ -498,7 +472,6 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         var count = items.length;
         var i;
         var data;
-<<<<<<< HEAD
         var sorters;
         var filters;
         var limit;
@@ -509,13 +482,10 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         var valid;
         var filterLn;
         var j;
-=======
->>>>>>> origin/master
 
         for (i = 0; i < count; i += 1) {
             data = items[i];
             options.records.push(Ext.isFunction(options.recordCreator) ?
-<<<<<<< HEAD
                 options.recordCreator(data, model) :
                 new model(data));
         }
@@ -557,15 +527,6 @@ Ext.define('DBProxies.data.proxy.IndexedDB', {
         options.resultSet.setSuccess(true);
         options.resultSet.setTotal(options.records.length);
         options.resultSet.setCount(options.records.length);
-=======
-                options.recordCreator(request.result, model) :
-                new model(data));
-        }
-
-        options.resultSet.setSuccess(true);
-        options.resultSet.setTotal(count);
-        options.resultSet.setCount(count);
->>>>>>> origin/master
 
         this.readComplete(options);
 
