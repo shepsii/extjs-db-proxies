@@ -72,12 +72,6 @@ Ext.define('DBProxies.data.proxy.Sql', {
 
     },
 
-    setException: function(operation, error) {
-
-        operation.setException(error);
-
-    },
-
     createTable: function(transaction) {
 
         transaction.executeSql([

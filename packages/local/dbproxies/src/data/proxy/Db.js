@@ -21,7 +21,7 @@ Ext.define('DBProxies.data.proxy.Db', {
          * explicitly defined in the model's fields config has been set on the record
          */
         implicitFields: false
-    }
+    },
     
     /**
      * @cfg {Object} reader
@@ -34,5 +34,11 @@ Ext.define('DBProxies.data.proxy.Db', {
      * Not used by db proxies
      * @hide
      */
+
+    setException: function(operation, error) {
+
+        operation.setException(error);
+
+    }
     
 });
