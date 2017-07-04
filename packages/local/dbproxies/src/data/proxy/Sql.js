@@ -315,9 +315,10 @@ Ext.define('DBProxies.data.proxy.Sql', {
     },
 
     transactionError: function(tx, error) {
+        //return;
         var args = arguments;
         var options = args[args.length - 1];
-        console.error('sql proxy transaction error: ', error);
+        console.error('sql proxy transaction error: ', arguments);
         this.setException(options.operation, error);
         if (options.callback) {
             Ext.callback(options.callback, options.scope, [options.operation]);
