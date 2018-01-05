@@ -305,6 +305,7 @@ Ext.define('DBProxies.data.proxy.Sql', {
             case 'auto':
                 return 'TEXT';
             case 'int':
+            case 'integer':
                 return 'INTEGER';
             case 'float':
                 return 'REAL';
